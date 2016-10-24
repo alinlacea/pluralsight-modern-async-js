@@ -107,6 +107,7 @@ function Operation(){
       } else {
           operation.setCallbacks(null, onError);
       }
+      return new Operation();
   };
 
   operation.onCompletion = function onCompletion(onSuccess){
@@ -115,6 +116,7 @@ function Operation(){
       } else {
           operation.setCallbacks(onSuccess);
       }
+      return new Operation();
   };
 
   operation.forwardCompletion = function (op) {
@@ -173,8 +175,7 @@ test("lexical parallelism", function(done){
 });
 
 test("removing nesting", function(done){
-    let weatherOp = new Operation();
-    fetchCurrentCity().onCompletion((city) => {
+    let weatherOp = fetchCurrentCity().onCompletion((city) => {
         fetchWeather(city).forwardCompletion(weatherOp);
     });
     weatherOp.onCompletion(weather => done());
