@@ -47,13 +47,23 @@ suite.only("operations");
 
 function fetchCurrentCity() {
   const operation = Operation();
-  getCurrentCity(function (error, result) {
-    if (error) {
-      operation.errorReactions.forEach(r => r(error));
-      return;
-    }
-    operation.successReactions.forEach(r => r(result));
-  });
+  getCurrentCity(operation.nodeCallback);
+
+
+
+  return operation;
+}
+
+function fetchWeather(city){
+  const operation = Operation();
+
+  getWeather(city, operation.nodeCallback);
+  return operation;
+}
+
+function fetchForecast(city){
+  const operation = Operation();
+  getWeather(city, operation.nodeCallback);
   return operation;
 }
 
@@ -62,27 +72,36 @@ function Operation(){
     successReactions: [],
     errorReactions: []
   };
+
+  operation.nodeCallback = function(error, result){
+    if (error) {
+      operation.fail(error);
+      return;
+    }
+    operation.succeed(result);
+
+  };
+  operation.fail = function fail(error){
+    operation.errorReactions.forEach(r => r(error));
+  };
+  operation.succeed = function succeed(result){
+    operation.successReactions.forEach(r => r(result));
+  };
+
+  operation.setCallbacks = function setCallbacks(onSuccess, onError) {
+    const noop = function() {};
+    operation.successReactions.push(onSuccess || noop);
+    operation.errorReactions.push(onError || noop);
+  };
+
   operation.onFailure = function onFailure(onError){
     operation.setCallbacks(null, onError);
-  }
+  };
 
   operation.onCompletion = function onCompletion(onSuccess){
     operation.setCallbacks(onSuccess);
-  }
-  return operation;
-}
+  };
 
-
-function fetchWeather(city){
-  const operation = Operation();
-
-  getWeather(function (error, result) {
-    if (error) {
-      operation.errorReactions.forEach(r => r(error));
-      return;
-    }
-    operation.successReactions.forEach(r => r(result));
-  });
   return operation;
 }
 
