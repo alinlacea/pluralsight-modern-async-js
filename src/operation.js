@@ -63,7 +63,7 @@ function fetchWeather(city){
 
 function fetchForecast(city){
   const operation = Operation();
-  getWeather(city, operation.nodeCallback);
+  getForecast(city, operation.nodeCallback);
   return operation;
 }
 
@@ -117,6 +117,11 @@ function Operation(){
       }
   };
 
+  operation.forwardCompletion = function (op) {
+      operation.onCompletion(op.succeed);
+      operation.onFailure(op.fail);
+  };
+
   return operation;
 }
 
@@ -149,12 +154,31 @@ test("register success callback async", function (done) {
     doLater(function(){currentCity.onCompletion((city) => {done();})})
 });
 
-test("register error callback async", function(done){
-    var currentCity = fetchWeather();
-    // currentCity.onFailure(city => console.log(city));
-    doLater(function(){currentCity.onFailure((error) => {done(error);})})
+// test("register error callback async", function(done){
+//     var currentCity = fetchWeather();
+//     // currentCity.onFailure(city => console.log(city));
+//     doLater(function(){currentCity.onFailure((error) => {done(error);})})
+// });
+
+test("lexical parallelism", function(done){
+    const city = "NYC";
+    const weather = fetchWeather(city);
+    const forecast = fetchForecast(city);
+    weather.onCompletion((weather) => {
+        forecast.onCompletion((forecast) =>{
+            console.log(`${city} has ${weather.temp} and ${forecast.fiveDay}`);
+            done();
+        })
+    });
 });
 
+test("removing nesting", function(done){
+    let weatherOp = new Operation();
+    fetchCurrentCity().onCompletion((city) => {
+        fetchWeather(city).forwardCompletion(weatherOp);
+    });
+    weatherOp.onCompletion(weather => done());
+});
 
 /* Avoid timing issues with initializing a database
  // initiate operation
