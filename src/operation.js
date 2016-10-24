@@ -70,7 +70,10 @@ function fetchForecast(city){
 function Operation(){
   const operation = {
     successReactions: [],
-    errorReactions: []
+    errorReactions: [],
+    state: "pending",
+    result: undefined,
+    error: undefined
   };
 
   operation.nodeCallback = function(error, result){
@@ -82,10 +85,14 @@ function Operation(){
 
   };
   operation.fail = function fail(error){
-    operation.errorReactions.forEach(r => r(error));
+      operation.state = "failed";
+      operation.error = error;
+      operation.errorReactions.forEach(r => r(error));
   };
   operation.succeed = function succeed(result){
-    operation.successReactions.forEach(r => r(result));
+      operation.state = "succeeded";
+      operation.result = result;
+      operation.successReactions.forEach(r => r(result));
   };
 
   operation.setCallbacks = function setCallbacks(onSuccess, onError) {
@@ -95,14 +102,26 @@ function Operation(){
   };
 
   operation.onFailure = function onFailure(onError){
-    operation.setCallbacks(null, onError);
+      if(operation.state == "failed"){
+          onError(operation.error);
+      } else {
+          operation.setCallbacks(null, onError);
+      }
   };
 
   operation.onCompletion = function onCompletion(onSuccess){
-    operation.setCallbacks(onSuccess);
+      if(operation.state == "succeeded"){
+          onSuccess(operation.result)
+      } else {
+          operation.setCallbacks(onSuccess);
+      }
   };
 
   return operation;
+}
+
+function doLater(func){
+    setTimeout(func, 15);
 }
 
 test("register only error handlers", function(done){
@@ -124,6 +143,19 @@ test("Summary", () => {
       })
     })
 });
+test("register success callback async", function (done) {
+    var currentCity = fetchCurrentCity();
+    currentCity.onCompletion(city => console.log(city));
+    doLater(function(){currentCity.onCompletion((city) => {done();})})
+});
+
+test("register error callback async", function(done){
+    var currentCity = fetchWeather();
+    // currentCity.onFailure(city => console.log(city));
+    doLater(function(){currentCity.onFailure((error) => {done(error);})})
+});
+
+
 /* Avoid timing issues with initializing a database
  // initiate operation
  const initDb = initiateDB();
