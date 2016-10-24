@@ -117,7 +117,13 @@ test("don't fail if no error handlers are passed", done => {
   operation.onFailure(error => done());
 });
 
-
+test("Summary", () => {
+    fetchCurrentCity().onCompletion((city) => {
+      fetchWeather(city).onCompletion((result) => {
+        console.log(result);
+      })
+    })
+});
 /* Avoid timing issues with initializing a database
  // initiate operation
  const initDb = initiateDB();
