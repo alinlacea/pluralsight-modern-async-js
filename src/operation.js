@@ -46,11 +46,7 @@ function getForecast(city, callback) {
 suite.only("operations");
 
 function fetchCurrentCity() {
-  const operation = {
-    successReactions: [],
-    errorReactions: []
-  };
-
+  const operation = Operation();
   getCurrentCity(function (error, result) {
     if (error) {
       operation.errorReactions.forEach(r => r(error));
@@ -58,36 +54,50 @@ function fetchCurrentCity() {
     }
     operation.successReactions.forEach(r => r(result));
   });
-
-  operation.setCallbacks = function setCallbacks(onSuccess, onError) {
-    operation.successReactions.push(onSuccess);
-    operation.errorReactions.push(onError);
-  };
   return operation;
 }
 
-test("pass multiple callbacks - all of them are called", function (done) {
+function Operation(){
+  const operation = {
+    successReactions: [],
+    errorReactions: []
+  };
+  operation.onFailure = function onFailure(onError){
+    operation.setCallbacks(null, onError);
+  }
 
+  operation.onCompletion = function onCompletion(onSuccess){
+    operation.setCallbacks(onSuccess);
+  }
+  return operation;
+}
+
+
+function fetchWeather(city){
+  const operation = Operation();
+
+  getWeather(function (error, result) {
+    if (error) {
+      operation.errorReactions.forEach(r => r(error));
+      return;
+    }
+    operation.successReactions.forEach(r => r(result));
+  });
+  return operation;
+}
+
+test("register only error handlers", function(done){
   const operation = fetchCurrentCity();
-
-  const multiDone = callDone(done).afterTwoCalls();
-
-  operation.setCallbacks(result => multiDone());
-  operation.setCallbacks(result => multiDone());
-
+  operation.onFailure(error => done(error));
+  operation.onCompletion(result => done());
 });
 
-test("fetchCurrentCity pass the callbacks later on", function (done) {
-
-  // initiate operation
-  const operation = fetchCurrentCity();
-
-  // register callbacks
-  operation.setCallbacks(
-    result => done(),
-    error => done(error));
-
+test("don't fail if no error handlers are passed", done => {
+  const operation = fetchWeather();
+  operation.onCompletion(result => done(new Error("shouldn't get here")));
+  operation.onFailure(error => done());
 });
+
 
 /* Avoid timing issues with initializing a database
  // initiate operation
