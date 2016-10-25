@@ -185,7 +185,11 @@ test("removing nesting", function(done){
       // So, whenever we have the result directly passed to the
       // next op / callback, we can omit the parameters passed
       // to the callback.
-      .then(weather => done());
+      .then(printWeather);
+    function printWeather(weather){
+      console.log(`Printing weather ${weather.temp}`);
+      done();
+    }
 });
 
 /* Avoid timing issues with initializing a database
