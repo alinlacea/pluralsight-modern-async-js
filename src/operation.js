@@ -48,15 +48,11 @@ suite.only("operations");
 function fetchCurrentCity() {
   const operation = Operation();
   getCurrentCity(operation.nodeCallback);
-
-
-
   return operation;
 }
 
 function fetchWeather(city){
   const operation = Operation();
-
   getWeather(city, operation.nodeCallback);
   return operation;
 }
@@ -82,7 +78,6 @@ function Operation(){
       return;
     }
     operation.succeed(result);
-
   };
   operation.fail = function fail(error){
       operation.state = "failed";
@@ -95,30 +90,39 @@ function Operation(){
       operation.successReactions.forEach(r => r(result));
   };
 
-  operation.setCallbacks = function setCallbacks(onSuccess, onError) {
-    const noop = function() {};
-    operation.successReactions.push(onSuccess || noop);
-    operation.errorReactions.push(onError || noop);
-  };
-
   operation.onFailure = function onFailure(onError){
-      if(operation.state == "failed"){
-          onError(operation.error);
-      } else {
-          operation.setCallbacks(null, onError);
-      }
-      return new Operation();
+      return operation.onCompletion(null, onError);
   };
 
-  operation.onCompletion = function onCompletion(onSuccess){
-      if(operation.state == "succeeded"){
-          onSuccess(operation.result)
-      } else {
-          operation.setCallbacks(onSuccess);
+  operation.onCompletion = function onCompletion(onSuccess, onError){
+    const noop = function() {};
+    const completionOp = new Operation();
+    
+    // Wraps the successHandler so we can forward the result
+    function successHandler(){
+      if(onSuccess){
+        const callbackResult = onSuccess(operation.result);
+        // If the result is an OP, then sync the ops
+        if (callbackResult && callbackResult.onCompletion){
+            callbackResult.forwardCompletion(completionOp);
+        }
       }
-      return new Operation();
+    }
+    
+    if(operation.state == "succeeded"){
+        successHandler();
+    } else if (operation.state == "failed"){
+        onError(operation.error);
+    } else {
+        operation.successReactions.push(successHandler);
+        operation.errorReactions.push(onError || noop);
+    }
+   
+    return completionOp;
   };
+  operation.then = operation.onCompletion;
 
+  // Finishes an Op whenever this op is finished
   operation.forwardCompletion = function (op) {
       operation.onCompletion(op.succeed);
       operation.onFailure(op.fail);
@@ -175,10 +179,13 @@ test("lexical parallelism", function(done){
 });
 
 test("removing nesting", function(done){
-    let weatherOp = fetchCurrentCity().onCompletion((city) => {
-        fetchWeather(city).forwardCompletion(weatherOp);
-    });
-    weatherOp.onCompletion(weather => done());
+    fetchCurrentCity()
+      // .then((city) => fetchWeather(city))
+      .then(fetchWeather)
+      // So, whenever we have the result directly passed to the
+      // next op / callback, we can omit the parameters passed
+      // to the callback.
+      .then(weather => done());
 });
 
 /* Avoid timing issues with initializing a database
