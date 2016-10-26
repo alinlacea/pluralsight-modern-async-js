@@ -135,6 +135,21 @@ function doLater(func){
     setTimeout(func, 15);
 }
 
+function fetchFailingCity(){
+  var operation = new Operation();
+  doLater(() => operation.fail("GPS broken!"));
+  return operation;
+}
+
+
+test("error recovery", function(done){
+  fetchFailingCity()
+    .then((city) => {
+      expect(city).toBe("default city");
+      done();
+    })
+})
+
 test("register only error handlers", function(done){
   const operation = fetchCurrentCity();
   operation.onFailure(error => done(error));
