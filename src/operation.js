@@ -1,9 +1,12 @@
 const delayms = 1;
+const expectedCity = "New York, NY";
+const expectedWeather = {temp: 50};
+const expectedForecast = {fiveDay: [60, 70, 80, 45, 50]};
 
 function getCurrentCity(callback) {
   setTimeout(function () {
 
-    const city = "New York, NY";
+    const city = expectedCity;
     callback(null, city);
 
   }, delayms)
@@ -17,9 +20,7 @@ function getWeather(city, callback) {
       return;
     }
 
-    const weather = {
-      temp: 50
-    };
+    const weather = expectedWeather;
 
     callback(null, weather)
 
@@ -34,9 +35,7 @@ function getForecast(city, callback) {
       return;
     }
 
-    const fiveDay = {
-      fiveDay: [60, 70, 80, 45, 50]
-    };
+    const fiveDay = expectedForecast;
 
     callback(null, fiveDay)
 
@@ -103,16 +102,25 @@ function Operation(){
       if(onSuccess){
         const callbackResult = onSuccess(operation.result);
         // If the result is an OP, then sync the ops
-        if (callbackResult && callbackResult.onCompletion){
+        if (callbackResult && callbackResult.then){
             callbackResult.forwardCompletion(proxyOp);
         }
+      } else {
+          proxyOp.succeed(operation.result);
       }
+
     }
 
     function errorHandler(){
         if(onError){
             const callbackResult = onError(operation.error);
+            if (callbackResult && callbackResult.then){
+                callbackResult.forwardCompletion(proxyOp);
+                return;
+            }
             proxyOp.succeed(callbackResult);
+        } else {
+            proxyOp.fail(operation.error);
         }
     }
 
@@ -146,7 +154,7 @@ function doLater(func){
 
 function fetchFailingCity(){
   var operation = new Operation();
-  doLater(() => operation.fail("GPS broken!"));
+  doLater(() => operation.fail(new Error("GPS broken!")));
   return operation;
 }
 
@@ -161,7 +169,40 @@ test("sync error recovery", function(done){
         expect(city).toBe("default city");
         done();
     })
-})
+});
+
+test("async error recovery", function(done){
+  fetchFailingCity()
+      .catch(function(){
+          return fetchCurrentCity();
+      })
+      .then((city) => {
+        expect(city).toBe(expectedCity);
+        done();
+    })
+});
+
+test('bypass error recovery', function (done) {
+   fetchCurrentCity()
+       .catch((error) => 'default')
+       .then((city) => {
+           expect(city).toBe(expectedCity);
+           done();
+       });
+});
+
+test("error fall through", function(done){
+  fetchCurrentCity()
+      .then((city) => {
+            console.log(city);
+            return fetchForecast();
+      })
+      .then((forecast) => {
+            expect(forecast).toBe(expectedForecast);
+            done();
+      })
+      .catch((error) => done(error));
+});
 
 test("register only error handlers", function(done){
   const operation = fetchCurrentCity();
