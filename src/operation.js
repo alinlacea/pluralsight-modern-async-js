@@ -100,7 +100,13 @@ function Operation(){
     // Wraps the successHandler so we can forward the result
     function successHandler(){
       if(onSuccess){
-        const callbackResult = onSuccess(operation.result);
+          let callbackResult;
+          try {
+              callbackResult = onSuccess(operation.result);
+          } catch (error) {
+              proxyOp.fail(error);
+              return;
+          }
         // If the result is an OP, then sync the ops
         if (callbackResult && callbackResult.then){
             callbackResult.forwardCompletion(proxyOp);
@@ -115,7 +121,13 @@ function Operation(){
 
     function errorHandler(){
         if(onError){
-            const callbackResult = onError(operation.error);
+            let callbackResult;
+            try {
+                callbackResult = onError(operation.error);
+            } catch (error) {
+                proxyOp.fail(error);
+                return;
+            }
             if (callbackResult && callbackResult.then){
                 callbackResult.forwardCompletion(proxyOp);
                 return;
@@ -159,6 +171,15 @@ function fetchFailingCity(){
   doLater(() => operation.fail(new Error("GPS broken!")));
   return operation;
 }
+
+test('thrown error', function(done){
+    fetchCurrentCity()
+        .then((city) => {
+            throw new Error('test');
+        })
+        .catch(e => done());
+});
+
 
 test('sync transformation', function(done){
    fetchCurrentCity()
