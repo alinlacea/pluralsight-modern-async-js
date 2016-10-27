@@ -79,11 +79,17 @@ function Operation(){
     operation.succeed(result);
   };
   operation.fail = function fail(error){
+      if(operation.complete)
+          return;
+      operation.complete = true;
       operation.state = "failed";
       operation.error = error;
       operation.errorReactions.forEach(r => r(error));
   };
   operation.succeed = function succeed(result){
+      if(operation.complete)
+          return;
+      operation.complete = true;
       operation.state = "succeeded";
       operation.result = result;
       operation.successReactions.forEach(r => r(result));
@@ -99,43 +105,46 @@ function Operation(){
     
     // Wraps the successHandler so we can forward the result
     function successHandler(){
-      if(onSuccess){
-          let callbackResult;
-          try {
-              callbackResult = onSuccess(operation.result);
-          } catch (error) {
-              proxyOp.fail(error);
-              return;
-          }
-        // If the result is an OP, then sync the ops
-        if (callbackResult && callbackResult.then){
-            callbackResult.forwardCompletion(proxyOp);
-            return;
-        }
-        proxyOp.succeed(callbackResult);
-      } else {
-          proxyOp.succeed(operation.result);
-      }
-
-    }
-
-    function errorHandler(){
-        if(onError){
-            let callbackResult;
-            try {
-                callbackResult = onError(operation.error);
-            } catch (error) {
-                proxyOp.fail(error);
-                return;
-            }
+        doLater(function(){
+            if(onSuccess){
+              let callbackResult;
+              try {
+                  callbackResult = onSuccess(operation.result);
+              } catch (error) {
+                  proxyOp.fail(error);
+                  return;
+              }
+            // If the result is an OP, then sync the ops
             if (callbackResult && callbackResult.then){
                 callbackResult.forwardCompletion(proxyOp);
                 return;
             }
             proxyOp.succeed(callbackResult);
-        } else {
-            proxyOp.fail(operation.error);
-        }
+          } else {
+              proxyOp.succeed(operation.result);
+          }
+        })
+    }
+
+    function errorHandler(){
+        doLater(function(){
+            if(onError){
+                let callbackResult;
+                try {
+                    callbackResult = onError(operation.error);
+                } catch (error) {
+                    proxyOp.fail(error);
+                    return;
+                }
+                if (callbackResult && callbackResult.then){
+                    callbackResult.forwardCompletion(proxyOp);
+                    return;
+                }
+                proxyOp.succeed(callbackResult);
+            } else {
+                proxyOp.fail(operation.error);
+            }
+        })
     }
 
     
@@ -166,11 +175,43 @@ function doLater(func){
     setTimeout(func, 15);
 }
 
+function fetchCurrentCityMultipleTimes(){
+    const operation = new Operation();
+    doLater(() => {
+        operation.succeed('NYC');
+        operation.succeed('Philly');
+    });
+    return operation;
+}
+
 function fetchFailingCity(){
   var operation = new Operation();
   doLater(() => operation.fail(new Error("GPS broken!")));
   return operation;
 }
+
+test('ensure success handlers are async', function (done) {
+    var operation = new Operation();
+    operation.succeed(expectedCity);
+    operation.then(function (city){
+        doneAlias();
+    });
+    const doneAlias = done;
+});
+
+test('ensure error handlers are async', function (done) {
+    var operation = new Operation();
+    operation.fail(new Error('no!'));
+    operation.catch(function (error){
+        doneAlias();
+    });
+    const doneAlias = done;
+});
+
+test('avoid multiple success calls', function(done) {
+    fetchCurrentCityMultipleTimes()
+        .then(e => done());
+});
 
 test('thrown error', function(done){
     fetchCurrentCity()
