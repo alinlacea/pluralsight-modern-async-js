@@ -91,12 +91,12 @@ function Operation(){
   };
 
   operation.onFailure = function onFailure(onError){
-      return operation.onCompletion(null, onError);
+      return operation.then(null, onError);
   };
 
   operation.onCompletion = function onCompletion(onSuccess, onError){
     const noop = function() {};
-    const completionOp = new Operation();
+    const proxyOp = new Operation();
     
     // Wraps the successHandler so we can forward the result
     function successHandler(){
@@ -104,23 +104,32 @@ function Operation(){
         const callbackResult = onSuccess(operation.result);
         // If the result is an OP, then sync the ops
         if (callbackResult && callbackResult.onCompletion){
-            callbackResult.forwardCompletion(completionOp);
+            callbackResult.forwardCompletion(proxyOp);
         }
       }
     }
+
+    function errorHandler(){
+        if(onError){
+            const callbackResult = onError(operation.error);
+            proxyOp.succeed(callbackResult);
+        }
+    }
+
     
     if(operation.state == "succeeded"){
         successHandler();
     } else if (operation.state == "failed"){
-        onError(operation.error);
+        errorHandler();
     } else {
         operation.successReactions.push(successHandler);
-        operation.errorReactions.push(onError || noop);
+        operation.errorReactions.push(errorHandler);
     }
    
-    return completionOp;
+    return proxyOp;
   };
   operation.then = operation.onCompletion;
+    operation.catch = operation.onFailure;
 
   // Finishes an Op whenever this op is finished
   operation.forwardCompletion = function (op) {
@@ -142,11 +151,15 @@ function fetchFailingCity(){
 }
 
 
-test("error recovery", function(done){
+test("sync error recovery", function(done){
   fetchFailingCity()
-    .then((city) => {
-      expect(city).toBe("default city");
-      done();
+      .catch(function(error){
+          console.log(error);
+          return 'default city';
+      })
+      .then((city) => {
+        expect(city).toBe("default city");
+        done();
     })
 })
 
