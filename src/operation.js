@@ -104,7 +104,9 @@ function Operation(){
         // If the result is an OP, then sync the ops
         if (callbackResult && callbackResult.then){
             callbackResult.forwardCompletion(proxyOp);
+            return;
         }
+        proxyOp.succeed(callbackResult);
       } else {
           proxyOp.succeed(operation.result);
       }
@@ -158,6 +160,17 @@ function fetchFailingCity(){
   return operation;
 }
 
+test('sync transformation', function(done){
+   fetchCurrentCity()
+       .then((city) => {
+           return '1000'
+       })
+       .then((zip) => {
+            console.log(zip);
+           expect(zip).toBe('1000');
+            done();
+    });
+});
 
 test("sync error recovery", function(done){
   fetchFailingCity()
@@ -201,7 +214,7 @@ test("error fall through", function(done){
             expect(forecast).toBe(expectedForecast);
             done();
       })
-      .catch((error) => done(error));
+      .catch((error) => done());
 });
 
 test("register only error handlers", function(done){
