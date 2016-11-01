@@ -73,10 +73,10 @@ function Operation(){
 
   operation.nodeCallback = function(error, result){
     if (error) {
-      operation.fail(error);
+      operation.reject(error);
       return;
     }
-    operation.succeed(result);
+    operation.resolve(result);
   };
   operation.fail = function fail(error){
       if(operation.complete)
@@ -86,10 +86,7 @@ function Operation(){
       operation.error = error;
       operation.errorReactions.forEach(r => r(error));
   };
-  operation.succeed = function succeed(result){
-      if(operation.complete)
-          return;
-      operation.complete = true;
+  var succeed = function succeed(result){
       operation.state = "succeeded";
       operation.result = result;
       operation.successReactions.forEach(r => r(result));
@@ -114,15 +111,10 @@ function Operation(){
                   proxyOp.fail(error);
                   return;
               }
-            // If the result is an OP, then sync the ops
-            if (callbackResult && callbackResult.then){
-                callbackResult.forwardCompletion(proxyOp);
-                return;
-            }
-            proxyOp.succeed(callbackResult);
-          } else {
-              proxyOp.succeed(operation.result);
-          }
+              proxyOp.resolve(callbackResult);
+              } else {
+                  proxyOp.resolve(operation.result);
+              }
         })
     }
 
@@ -136,11 +128,7 @@ function Operation(){
                     proxyOp.fail(error);
                     return;
                 }
-                if (callbackResult && callbackResult.then){
-                    callbackResult.forwardCompletion(proxyOp);
-                    return;
-                }
-                proxyOp.succeed(callbackResult);
+            proxyOp.resolve(callbackResult);
             } else {
                 proxyOp.fail(operation.error);
             }
@@ -160,13 +148,22 @@ function Operation(){
     return proxyOp;
   };
   operation.then = operation.onCompletion;
-    operation.catch = operation.onFailure;
+  operation.catch = operation.onFailure;
 
-  // Finishes an Op whenever this op is finished
-  operation.forwardCompletion = function (op) {
-      operation.onCompletion(op.succeed);
-      operation.onFailure(op.fail);
-  };
+    operation.reject = operation.fail;
+    operation.resolve = function (value) {
+        if(operation.complete)
+            return;
+        operation.complete = true;
+        // Value is either a promise or a result
+        // If the result is an OP, then sync the ops
+        if (value && value.then){
+            value.then(operation.resolve, operation.fail);
+            return;
+        }
+        succeed(value);
+    };
+
 
   return operation;
 }
@@ -178,8 +175,8 @@ function doLater(func){
 function fetchCurrentCityMultipleTimes(){
     const operation = new Operation();
     doLater(() => {
-        operation.succeed('NYC');
-        operation.succeed('Philly');
+        operation.resolve('NYC');
+        operation.resolve('Philly');
     });
     return operation;
 }
@@ -192,7 +189,7 @@ function fetchFailingCity(){
 
 test('ensure success handlers are async', function (done) {
     var operation = new Operation();
-    operation.succeed(expectedCity);
+    operation.resolve(expectedCity);
     operation.then(function (city){
         doneAlias();
     });
